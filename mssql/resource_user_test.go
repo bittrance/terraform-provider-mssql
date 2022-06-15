@@ -16,7 +16,7 @@ func TestAccUser_Local_Instance(t *testing.T) {
     CheckDestroy:      func(state *terraform.State) error { return testAccCheckUserDestroy(state) },
     Steps: []resource.TestStep{
       {
-        Config: testAccCheckUser(t, "instance", false, map[string]interface{}{"username": "instance", "login_name": "user_instance", "login_password": "valueIsH8kd$¡", "roles": "[\"db_owner\"]"}),
+        Config: testAccCheckUser(t, "instance", "login", map[string]interface{}{"username": "instance", "login_name": "user_instance", "login_password": "valueIsH8kd$¡", "roles": "[\"db_owner\"]"}),
         Check: resource.ComposeTestCheckFunc(
           testAccCheckUserExists("mssql_user.instance"),
           testAccCheckDatabaseUserWorks("mssql_user.instance", "user_instance", "valueIsH8kd$¡"),
@@ -50,7 +50,7 @@ func TestAccUser_Azure_Instance(t *testing.T) {
     CheckDestroy:      func(state *terraform.State) error { return testAccCheckUserDestroy(state) },
     Steps: []resource.TestStep{
       {
-        Config: testAccCheckUser(t, "instance", true, map[string]interface{}{"database": "testdb", "username": "instance", "login_name": "user_instance", "login_password": "valueIsH8kd$¡", "roles": "[\"db_owner\"]"}),
+        Config: testAccCheckUser(t, "instance", "azure", map[string]interface{}{"database": "testdb", "username": "instance", "login_name": "user_instance", "login_password": "valueIsH8kd$¡", "roles": "[\"db_owner\"]"}),
         Check: resource.ComposeTestCheckFunc(
           testAccCheckUserExists("mssql_user.instance"),
           testAccCheckDatabaseUserWorks("mssql_user.instance", "user_instance", "valueIsH8kd$¡"),
@@ -85,7 +85,7 @@ func TestAccUser_Azure_Database(t *testing.T) {
     CheckDestroy:      func(state *terraform.State) error { return testAccCheckUserDestroy(state) },
     Steps: []resource.TestStep{
       {
-        Config: testAccCheckUser(t, "database", true, map[string]interface{}{"database": "testdb", "username": "database_user", "password": "valueIsH8kd$¡", "roles": "[\"db_owner\"]"}),
+        Config: testAccCheckUser(t, "database", "azure", map[string]interface{}{"database": "testdb", "username": "database_user", "password": "valueIsH8kd$¡", "roles": "[\"db_owner\"]"}),
         Check: resource.ComposeTestCheckFunc(
           testAccCheckUserExists("mssql_user.database"),
           testAccCheckDatabaseUserWorks("mssql_user.database", "database_user", "valueIsH8kd$¡"),
@@ -113,6 +113,38 @@ func TestAccUser_Azure_Database(t *testing.T) {
   })
 }
 
+func TestAccUser_Fedauth_Database(t *testing.T) {
+  resource.Test(t, resource.TestCase{
+    PreCheck:          func() { testAccPreCheck(t) },
+    ProviderFactories: testAccProviders,
+    CheckDestroy:      func(state *terraform.State) error { return testAccCheckUserDestroy(state) },
+    Steps: []resource.TestStep{
+      {
+        Config: testAccCheckUser(t, "database", "fedauth", map[string]interface{}{"database": "testdb", "username": "database_user", "password": "valueIsH8kd$¡", "roles": "[\"db_owner\"]"}),
+        Check: resource.ComposeTestCheckFunc(
+          testAccCheckUserExists("mssql_user.database"),
+          testAccCheckDatabaseUserWorks("mssql_user.database", "database_user", "valueIsH8kd$¡"),
+          resource.TestCheckResourceAttr("mssql_user.database", "database", "testdb"),
+          resource.TestCheckResourceAttr("mssql_user.database", "username", "database_user"),
+          resource.TestCheckResourceAttr("mssql_user.database", "password", "valueIsH8kd$¡"),
+          resource.TestCheckResourceAttr("mssql_user.database", "login_name", ""),
+          resource.TestCheckResourceAttr("mssql_user.database", "authentication_type", "DATABASE"),
+          resource.TestCheckResourceAttr("mssql_user.database", "default_schema", "dbo"),
+          resource.TestCheckResourceAttr("mssql_user.database", "default_language", ""),
+          resource.TestCheckResourceAttr("mssql_user.database", "roles.#", "1"),
+          resource.TestCheckResourceAttr("mssql_user.database", "roles.0", "db_owner"),
+          resource.TestCheckResourceAttr("mssql_user.database", "server.#", "1"),
+          resource.TestCheckResourceAttr("mssql_user.database", "server.0.host", os.Getenv("TF_ACC_SQL_SERVER")),
+          resource.TestCheckResourceAttr("mssql_user.database", "server.0.port", "1433"),
+          resource.TestCheckResourceAttr("mssql_user.database", "server.0.azure_login.#", "0"),
+          resource.TestCheckResourceAttr("mssql_user.database", "server.0.login.#", "0"),
+          resource.TestCheckResourceAttrSet("mssql_user.database", "principal_id"),
+        ),
+      },
+    },
+  })
+}
+
 func TestAccUser_Azure_External(t *testing.T) {
   tenantId := os.Getenv("MSSQL_TENANT_ID")
   clientId := os.Getenv("TF_ACC_AZURE_USER_CLIENT_ID")
@@ -124,7 +156,7 @@ func TestAccUser_Azure_External(t *testing.T) {
     CheckDestroy:      func(state *terraform.State) error { return testAccCheckUserDestroy(state) },
     Steps: []resource.TestStep{
       {
-        Config: testAccCheckUser(t, "database", true, map[string]interface{}{"database": "testdb", "username": clientUser, "roles": "[\"db_owner\"]"}),
+        Config: testAccCheckUser(t, "database", "azure", map[string]interface{}{"database": "testdb", "username": clientUser, "roles": "[\"db_owner\"]"}),
         Check: resource.ComposeTestCheckFunc(
           testAccCheckUserExists("mssql_user.database"),
           testAccCheckExternalUserWorks("mssql_user.database", tenantId, clientId, clientSecret),
@@ -152,6 +184,42 @@ func TestAccUser_Azure_External(t *testing.T) {
   })
 }
 
+func TestAccUser_Fedauth_External(t *testing.T) {
+  tenantId := os.Getenv("MSSQL_TENANT_ID")
+  clientId := os.Getenv("TF_ACC_AZURE_USER_CLIENT_ID")
+  clientUser := os.Getenv("TF_ACC_AZURE_USER_CLIENT_USER")
+  clientSecret := os.Getenv("TF_ACC_AZURE_USER_CLIENT_SECRET")
+  resource.Test(t, resource.TestCase{
+    PreCheck:          func() { testAccPreCheck(t) },
+    ProviderFactories: testAccProviders,
+    CheckDestroy:      func(state *terraform.State) error { return testAccCheckUserDestroy(state) },
+    Steps: []resource.TestStep{
+      {
+        Config: testAccCheckUser(t, "database", "fedauth", map[string]interface{}{"database": "testdb", "username": clientUser, "roles": "[\"db_owner\"]"}),
+        Check: resource.ComposeTestCheckFunc(
+          testAccCheckUserExists("mssql_user.database"),
+          testAccCheckExternalUserWorks("mssql_user.database", tenantId, clientId, clientSecret),
+          resource.TestCheckResourceAttr("mssql_user.database", "database", "testdb"),
+          resource.TestCheckResourceAttr("mssql_user.database", "username", clientUser),
+          resource.TestCheckResourceAttr("mssql_user.database", "login_name", ""),
+          resource.TestCheckResourceAttr("mssql_user.database", "authentication_type", "EXTERNAL"),
+          resource.TestCheckResourceAttr("mssql_user.database", "default_schema", "dbo"),
+          resource.TestCheckResourceAttr("mssql_user.database", "default_language", ""),
+          resource.TestCheckResourceAttr("mssql_user.database", "roles.#", "1"),
+          resource.TestCheckResourceAttr("mssql_user.database", "roles.0", "db_owner"),
+          resource.TestCheckResourceAttr("mssql_user.database", "server.#", "1"),
+          resource.TestCheckResourceAttr("mssql_user.database", "server.0.host", os.Getenv("TF_ACC_SQL_SERVER")),
+          resource.TestCheckResourceAttr("mssql_user.database", "server.0.port", "1433"),
+          resource.TestCheckResourceAttr("mssql_user.database", "server.0.azure_login.#", "0"),
+          resource.TestCheckResourceAttr("mssql_user.database", "server.0.login.#", "0"),
+          resource.TestCheckResourceAttrSet("mssql_user.database", "principal_id"),
+          resource.TestCheckNoResourceAttr("mssql_user.database", "password"),
+        ),
+      },
+    },
+  })
+}
+
 func TestAccUser_Local_Update_DefaultSchema(t *testing.T) {
   resource.Test(t, resource.TestCase{
     PreCheck:          func() { testAccPreCheck(t) },
@@ -160,7 +228,7 @@ func TestAccUser_Local_Update_DefaultSchema(t *testing.T) {
     CheckDestroy:      func(state *terraform.State) error { return testAccCheckLoginDestroy(state) },
     Steps: []resource.TestStep{
       {
-        Config: testAccCheckUser(t, "update", false, map[string]interface{}{"username": "test_update", "login_name": "user_update", "login_password": "valueIsH8kd$¡"}),
+        Config: testAccCheckUser(t, "update", "login", map[string]interface{}{"username": "test_update", "login_name": "user_update", "login_password": "valueIsH8kd$¡"}),
         Check: resource.ComposeTestCheckFunc(
           resource.TestCheckResourceAttr("mssql_user.update", "default_schema", "dbo"),
           testAccCheckUserExists("mssql_user.update", Check{"default_schema", "==", "dbo"}),
@@ -168,7 +236,7 @@ func TestAccUser_Local_Update_DefaultSchema(t *testing.T) {
         ),
       },
       {
-        Config: testAccCheckUser(t, "update", false, map[string]interface{}{"username": "test_update", "login_name": "user_update", "login_password": "valueIsH8kd$¡", "default_schema": "sys"}),
+        Config: testAccCheckUser(t, "update", "login", map[string]interface{}{"username": "test_update", "login_name": "user_update", "login_password": "valueIsH8kd$¡", "default_schema": "sys"}),
         Check: resource.ComposeTestCheckFunc(
           resource.TestCheckResourceAttr("mssql_user.update", "default_schema", "sys"),
           testAccCheckUserExists("mssql_user.update", Check{"default_schema", "==", "sys"}),
@@ -187,7 +255,7 @@ func TestAccUser_Local_Update_DefaultLanguage(t *testing.T) {
     CheckDestroy:      func(state *terraform.State) error { return testAccCheckLoginDestroy(state) },
     Steps: []resource.TestStep{
       {
-        Config: testAccCheckUser(t, "update", false, map[string]interface{}{"username": "test_update", "login_name": "user_update", "login_password": "valueIsH8kd$¡"}),
+        Config: testAccCheckUser(t, "update", "login", map[string]interface{}{"username": "test_update", "login_name": "user_update", "login_password": "valueIsH8kd$¡"}),
         Check: resource.ComposeTestCheckFunc(
           resource.TestCheckResourceAttr("mssql_user.update", "default_language", ""),
           testAccCheckUserExists("mssql_user.update", Check{"default_language", "==", ""}),
@@ -195,7 +263,7 @@ func TestAccUser_Local_Update_DefaultLanguage(t *testing.T) {
         ),
       },
       {
-        Config: testAccCheckUser(t, "update", false, map[string]interface{}{"username": "test_update", "login_name": "user_update", "login_password": "valueIsH8kd$¡", "default_language": "russian"}),
+        Config: testAccCheckUser(t, "update", "login", map[string]interface{}{"username": "test_update", "login_name": "user_update", "login_password": "valueIsH8kd$¡", "default_language": "russian"}),
         Check: resource.ComposeTestCheckFunc(
           resource.TestCheckResourceAttr("mssql_user.update", "default_language", ""),
           testAccCheckUserExists("mssql_user.update", Check{"default_language", "==", ""}),
@@ -214,7 +282,7 @@ func TestAccUser_Local_Update_Roles(t *testing.T) {
     CheckDestroy:      func(state *terraform.State) error { return testAccCheckLoginDestroy(state) },
     Steps: []resource.TestStep{
       {
-        Config: testAccCheckUser(t, "update", false, map[string]interface{}{"username": "test_update", "login_name": "user_update", "login_password": "valueIsH8kd$¡"}),
+        Config: testAccCheckUser(t, "update", "login", map[string]interface{}{"username": "test_update", "login_name": "user_update", "login_password": "valueIsH8kd$¡"}),
         Check: resource.ComposeTestCheckFunc(
           resource.TestCheckResourceAttr("mssql_user.update", "roles.#", "0"),
           testAccCheckUserExists("mssql_user.update", Check{"roles", "==", []string{}}),
@@ -222,7 +290,7 @@ func TestAccUser_Local_Update_Roles(t *testing.T) {
         ),
       },
       {
-        Config: testAccCheckUser(t, "update", false, map[string]interface{}{"username": "test_update", "login_name": "user_update", "login_password": "valueIsH8kd$¡", "roles": "[\"db_owner\",\"db_datawriter\"]"}),
+        Config: testAccCheckUser(t, "update", "login", map[string]interface{}{"username": "test_update", "login_name": "user_update", "login_password": "valueIsH8kd$¡", "roles": "[\"db_owner\",\"db_datawriter\"]"}),
         Check: resource.ComposeTestCheckFunc(
           resource.TestCheckResourceAttr("mssql_user.update", "roles.#", "2"),
           resource.TestCheckResourceAttr("mssql_user.update", "roles.0", "db_owner"),
@@ -232,7 +300,7 @@ func TestAccUser_Local_Update_Roles(t *testing.T) {
         ),
       },
       {
-        Config: testAccCheckUser(t, "update", false, map[string]interface{}{"username": "test_update", "login_name": "user_update", "login_password": "valueIsH8kd$¡", "roles": "[\"db_owner\"]"}),
+        Config: testAccCheckUser(t, "update", "login", map[string]interface{}{"username": "test_update", "login_name": "user_update", "login_password": "valueIsH8kd$¡", "roles": "[\"db_owner\"]"}),
         Check: resource.ComposeTestCheckFunc(
           resource.TestCheckResourceAttr("mssql_user.update", "roles.#", "1"),
           resource.TestCheckResourceAttr("mssql_user.update", "roles.0", "db_owner"),
@@ -251,7 +319,7 @@ func TestAccUser_Azure_Update_DefaultSchema(t *testing.T) {
     CheckDestroy:      func(state *terraform.State) error { return testAccCheckLoginDestroy(state) },
     Steps: []resource.TestStep{
       {
-        Config: testAccCheckUser(t, "update", true, map[string]interface{}{"username": "test_update", "login_name": "user_update", "login_password": "valueIsH8kd$¡"}),
+        Config: testAccCheckUser(t, "update", "azure", map[string]interface{}{"username": "test_update", "login_name": "user_update", "login_password": "valueIsH8kd$¡"}),
         Check: resource.ComposeTestCheckFunc(
           resource.TestCheckResourceAttr("mssql_user.update", "default_schema", "dbo"),
           testAccCheckUserExists("mssql_user.update", Check{"default_schema", "==", "dbo"}),
@@ -259,7 +327,7 @@ func TestAccUser_Azure_Update_DefaultSchema(t *testing.T) {
         ),
       },
       {
-        Config: testAccCheckUser(t, "update", true, map[string]interface{}{"username": "test_update", "login_name": "user_update", "login_password": "valueIsH8kd$¡", "default_schema": "sys"}),
+        Config: testAccCheckUser(t, "update", "azure", map[string]interface{}{"username": "test_update", "login_name": "user_update", "login_password": "valueIsH8kd$¡", "default_schema": "sys"}),
         Check: resource.ComposeTestCheckFunc(
           resource.TestCheckResourceAttr("mssql_user.update", "default_schema", "sys"),
           testAccCheckUserExists("mssql_user.update", Check{"default_schema", "==", "sys"}),
@@ -277,7 +345,7 @@ func TestAccUser_Azure_Update_DefaultLanguage(t *testing.T) {
     CheckDestroy:      func(state *terraform.State) error { return testAccCheckLoginDestroy(state) },
     Steps: []resource.TestStep{
       {
-        Config: testAccCheckUser(t, "update", true, map[string]interface{}{"username": "test_update", "login_name": "user_update", "login_password": "valueIsH8kd$¡"}),
+        Config: testAccCheckUser(t, "update", "azure", map[string]interface{}{"username": "test_update", "login_name": "user_update", "login_password": "valueIsH8kd$¡"}),
         Check: resource.ComposeTestCheckFunc(
           resource.TestCheckResourceAttr("mssql_user.update", "default_language", ""),
           testAccCheckUserExists("mssql_user.update", Check{"default_language", "==", ""}),
@@ -285,7 +353,7 @@ func TestAccUser_Azure_Update_DefaultLanguage(t *testing.T) {
         ),
       },
       {
-        Config: testAccCheckUser(t, "update", true, map[string]interface{}{"username": "test_update", "login_name": "user_update", "login_password": "valueIsH8kd$¡", "default_language": "russian"}),
+        Config: testAccCheckUser(t, "update", "azure", map[string]interface{}{"username": "test_update", "login_name": "user_update", "login_password": "valueIsH8kd$¡", "default_language": "russian"}),
         Check: resource.ComposeTestCheckFunc(
           resource.TestCheckResourceAttr("mssql_user.update", "default_language", ""),
           testAccCheckUserExists("mssql_user.update", Check{"default_language", "==", ""}),
@@ -303,7 +371,7 @@ func TestAccUser_Azure_Update_Roles(t *testing.T) {
     CheckDestroy:      func(state *terraform.State) error { return testAccCheckLoginDestroy(state) },
     Steps: []resource.TestStep{
       {
-        Config: testAccCheckUser(t, "update", true, map[string]interface{}{"database": "testdb", "username": "test_update", "login_name": "user_update", "login_password": "valueIsH8kd$¡"}),
+        Config: testAccCheckUser(t, "update", "azure", map[string]interface{}{"database": "testdb", "username": "test_update", "login_name": "user_update", "login_password": "valueIsH8kd$¡"}),
         Check: resource.ComposeTestCheckFunc(
           resource.TestCheckResourceAttr("mssql_user.update", "roles.#", "0"),
           testAccCheckUserExists("mssql_user.update", Check{"roles", "==", []string{}}),
@@ -311,7 +379,7 @@ func TestAccUser_Azure_Update_Roles(t *testing.T) {
         ),
       },
       {
-        Config: testAccCheckUser(t, "update", true, map[string]interface{}{"database": "testdb", "username": "test_update", "login_name": "user_update", "login_password": "valueIsH8kd$¡", "roles": "[\"db_owner\",\"db_datawriter\"]"}),
+        Config: testAccCheckUser(t, "update", "azure", map[string]interface{}{"database": "testdb", "username": "test_update", "login_name": "user_update", "login_password": "valueIsH8kd$¡", "roles": "[\"db_owner\",\"db_datawriter\"]"}),
         Check: resource.ComposeTestCheckFunc(
           resource.TestCheckResourceAttr("mssql_user.update", "roles.#", "2"),
           resource.TestCheckResourceAttr("mssql_user.update", "roles.0", "db_owner"),
@@ -321,7 +389,7 @@ func TestAccUser_Azure_Update_Roles(t *testing.T) {
         ),
       },
       {
-        Config: testAccCheckUser(t, "update", true, map[string]interface{}{"database": "testdb", "username": "test_update", "login_name": "user_update", "login_password": "valueIsH8kd$¡", "roles": "[\"db_owner\"]"}),
+        Config: testAccCheckUser(t, "update", "azure", map[string]interface{}{"database": "testdb", "username": "test_update", "login_name": "user_update", "login_password": "valueIsH8kd$¡", "roles": "[\"db_owner\"]"}),
         Check: resource.ComposeTestCheckFunc(
           resource.TestCheckResourceAttr("mssql_user.update", "roles.#", "1"),
           resource.TestCheckResourceAttr("mssql_user.update", "roles.0", "db_owner"),
@@ -333,12 +401,12 @@ func TestAccUser_Azure_Update_Roles(t *testing.T) {
   })
 }
 
-func testAccCheckUser(t *testing.T, name string, azure bool, data map[string]interface{}) string {
+func testAccCheckUser(t *testing.T, name string, login string, data map[string]interface{}) string {
   text := `{{ if .login_name }}
            resource "mssql_login" "{{ .name }}" {
              server {
                host = "{{ .host }}"
-               {{ if .azure }}azure_login {}{{ else }}login {}{{ end }}
+               {{ if eq .login "azure" }}azure_login {}{{ else if eq .login "login" }}login {}{{ end }}
              }
              login_name = "{{ .login_name }}"
              password   = "{{ .login_password }}"
@@ -347,7 +415,7 @@ func testAccCheckUser(t *testing.T, name string, azure bool, data map[string]int
            resource "mssql_user" "{{ .name }}" {
              server {
                host = "{{ .host }}"
-               {{ if .azure }}azure_login {}{{ else }}login {}{{ end }}
+               {{ if eq .login "azure" }}azure_login {}{{ else if eq .login "login" }}login {}{{ end }}
              }
              {{ with .database }}database = "{{ . }}"{{ end }}
              username = "{{ .username }}"
@@ -358,11 +426,13 @@ func testAccCheckUser(t *testing.T, name string, azure bool, data map[string]int
              {{ with .roles }}roles = {{ . }}{{ end }}
            }`
   data["name"] = name
-  data["azure"] = azure
-  if azure {
+  data["login"] = login
+  if login == "fedauth" || login == "azure" {
     data["host"] = os.Getenv("TF_ACC_SQL_SERVER")
-  } else {
+  } else if login == "login" {
     data["host"] = "localhost"
+  } else {
+    t.Fatalf("login expected to be one of 'login', 'azure', 'fedauth', got %s", login)
   }
   res, err := templateToString(name, text, data)
   if err != nil {

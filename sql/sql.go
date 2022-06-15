@@ -8,6 +8,7 @@ import (
   "github.com/Azure/go-autorest/autorest/adal"
   "github.com/Azure/go-autorest/autorest/azure"
   mssql "github.com/denisenkom/go-mssqldb"
+  "github.com/denisenkom/go-mssqldb/azuread"
   "github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
   "github.com/pkg/errors"
   "log"
@@ -158,19 +159,29 @@ func (c *Connector) db() (*sql.DB, error) {
 
 func (c *Connector) connector() (driver.Connector, error) {
   query := url.Values{}
+  host := fmt.Sprintf("%s:%s", c.Host, c.Port)
   if c.Database != "" {
     query.Set("database", c.Database)
   }
+  if c.Login != nil || c.AzureLogin != nil {
+    connectionString := (&url.URL{
+      Scheme:   "sqlserver",
+      User:     c.userPassword(),
+      Host:     host,
+      RawQuery: query.Encode(),
+    }).String()
+    if c.Login != nil {
+        return mssql.NewConnector(connectionString)
+    }
+    return mssql.NewAccessTokenConnector(connectionString, func() (string, error) { return c.tokenProvider() })
+  }
+  query.Set("fedauth", "ActiveDirectoryDefault")
   connectionString := (&url.URL{
     Scheme:   "sqlserver",
-    User:     c.userPassword(),
-    Host:     fmt.Sprintf("%s:%s", c.Host, c.Port),
+    Host:     host,
     RawQuery: query.Encode(),
   }).String()
-  if c.Login != nil {
-    return mssql.NewConnector(connectionString)
-  }
-  return mssql.NewAccessTokenConnector(connectionString, func() (string, error) { return c.tokenProvider() })
+  return azuread.NewConnector(connectionString)
 }
 
 func (c *Connector) userPassword() *url.Userinfo {

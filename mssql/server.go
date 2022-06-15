@@ -35,7 +35,7 @@ func getServerSchema(prefix string) map[string]*schema.Schema {
 			Type:         schema.TypeList,
 			MaxItems:     1,
 			Optional:     true,
-			ExactlyOneOf: []string{prefix + "login", prefix + "azure_login"},
+			ConflictsWith: []string{prefix + "azure_login"},
 			Elem: &schema.Resource{
 				Schema: map[string]*schema.Schema{
 					"username": {
@@ -56,7 +56,7 @@ func getServerSchema(prefix string) map[string]*schema.Schema {
 			Type:         schema.TypeList,
 			MaxItems:     1,
 			Optional:     true,
-			ExactlyOneOf: []string{prefix + "login", prefix + "azure_login"},
+			ConflictsWith: []string{prefix + "login"},
 			Elem: &schema.Resource{
 				Schema: map[string]*schema.Schema{
 					"tenant_id": {
